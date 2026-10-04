@@ -1,0 +1,127 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: hsl(var(--line));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background-color: hsl(var(--paper));
+    color: hsl(var(--ink));
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 400; /* the serif carries weight through form, not boldness */
+    color: hsl(var(--ink));
+    margin: 0;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  /* Numerals line up in tables, tallies and countdowns. A standings column
+   * where digits jitter between rows looks broken even when it is correct. */
+  table,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ONE focus style, everywhere, always visible. Never remove it — the ballot
+   * is explicitly keyboard-operable and this is how you know where you are. */
+  :focus-visible {
+    outline: var(--ring-width) solid hsl(var(--accent-ring));
+    outline-offset: var(--ring-offset);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Only suppress the ring for pointer users who did not ask for it. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background: hsl(var(--accent-soft));
+    color: hsl(var(--ink));
+  }
+
+  /* Images inside entry frames must never stretch. Every logo is presented
+   * identically so that presentation never advantages an entry. */
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+}
+
+@layer components {
+  /* A hairline rule used to separate sections. Cheaper visually than a card. */
+  .rule {
+    @apply border-0 border-t border-line;
+  }
+
+  /* Section eyebrow: small, spaced, uppercase, muted. */
+  .eyebrow {
+    @apply font-sans text-label uppercase text-ink-subtle;
+  }
+
+  /* The neutral frame every logo is displayed in. Identical for all entries:
+   * same aspect, same padding, same background, same border. */
+  .entry-frame {
+    @apply grid place-items-center overflow-hidden rounded border border-line bg-paper-raised;
+    aspect-ratio: 1 / 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Reduced motion.
+ *
+ * The results screen animates vote transfers between rounds, which is the one
+ * genuinely motion-heavy moment in the app. Anyone who has asked their system
+ * to calm down gets the same information without the movement — transitions
+ * collapse to near-zero rather than being removed, so state changes still
+ * register.
+ * ------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

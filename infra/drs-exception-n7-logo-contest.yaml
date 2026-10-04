@@ -1,0 +1,17 @@
+# Domain Restricted Sharing exception — SCOPED TO ONE PROJECT.
+#
+# Argolis enforces constraints/iam.allowedPolicyMemberDomains org-wide, which
+# blocks binding `allUsers`. Firebase Hosting proxying to Cloud Run needs
+# exactly that one binding (roles/run.invoker for allUsers), so without this
+# the deploy fails at the IAM step.
+#
+# This overrides the constraint for `n7-logo-contest` ONLY. The org-wide
+# default stays enforced for every other project.
+#
+# Note what is NOT relaxed: constraints/storage.publicAccessPrevention stays
+# enforced, so the logo bucket remains private and images are served solely
+# through short-lived signed URLs.
+name: projects/n7-logo-contest/policies/iam.allowedPolicyMemberDomains
+spec:
+  rules:
+    - allowAll: true

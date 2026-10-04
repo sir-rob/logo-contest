@@ -1,0 +1,18 @@
+# Domain Restricted Sharing exception — SCOPED TO ONE PROJECT.
+#
+# Fallback copy, used only if the project ID `n7-logo-contest` turns out to be
+# taken (project IDs are globally unique, not org-unique). Identical in intent
+# to the primary file; only the project name differs.
+#
+# Argolis enforces constraints/iam.allowedPolicyMemberDomains org-wide, which
+# blocks binding `allUsers`. Firebase Hosting proxying to Cloud Run needs
+# exactly that one binding (roles/run.invoker for allUsers), so without this
+# the deploy fails at the IAM step.
+#
+# Scoped to this project ONLY — the org-wide default stays enforced everywhere
+# else. And constraints/storage.publicAccessPrevention is deliberately NOT
+# relaxed, so the logo bucket stays private behind signed URLs.
+name: projects/media-moguls-logo-contest/policies/iam.allowedPolicyMemberDomains
+spec:
+  rules:
+    - allowAll: true

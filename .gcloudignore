@@ -1,0 +1,50 @@
+# What `gcloud builds submit` must NOT upload as build context.
+#
+# THIS FILE IS LOAD-BEARING. gcloud only derives exclusions from .gitignore
+# when the directory is a git checkout — this one is not, so without an
+# explicit .gcloudignore it would upload EVERYTHING: node_modules alone is
+# 663 MB, plus emulator data and Terraform state. That is a slow, costly
+# upload on every build, and it would push the context past comfortable
+# limits for no benefit.
+#
+# Keep this in step with .dockerignore. They serve different tools —
+# .gcloudignore controls what is UPLOADED to Cloud Build, .dockerignore
+# controls what the daemon sees as build context once it is there — but
+# anything in one almost always belongs in the other.
+
+# --- Dependencies: reinstalled inside the image from the lockfile ----------
+# A host node_modules also carries platform-specific binaries (sharp's
+# libvips), which would be wrong for a linux/amd64 image anyway.
+node_modules/
+**/node_modules/
+
+# --- Build output: recompiled in the image ---------------------------------
+dist/
+**/dist/
+dist-gallery/
+build/
+*.tsbuildinfo
+
+# --- Local development state -----------------------------------------------
+.emulator-data/
+coverage/
+.vite/
+*.log
+
+# --- Infrastructure state: secrets and machine-specific values -------------
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/terraform.tfvars
+
+# --- Local env files --------------------------------------------------------
+.env
+.env.*
+!.env.example
+apps/web/.env.development
+
+# --- Not needed to build a Node server image -------------------------------
+.firebase/
+*.png
+*.pdf

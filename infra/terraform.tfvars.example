@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------------------
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored
+# alongside the rest of the local Terraform state -- nothing in here is
+# secret, but it is environment-specific and should not be committed.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# The three values with no default are project_id, bootstrap_admin_email and
+# app_url. Everything else below is shown at its default so you can see what
+# you are getting.
+# ---------------------------------------------------------------------------
+
+# --- Required ---------------------------------------------------------------
+
+# The Argolis project. Must already exist and be linked to a billing account
+# (runbook step 1), and must already have the Domain Restricted Sharing
+# exception applied (runbook step 2).
+project_id = "n7-logo-contest"
+
+# Promoted to admin on first sign-in, then ignored. Must be on a domain in
+# allowed_domains, or the account cannot sign in to be promoted.
+bootstrap_admin_email = "you@google.com"
+
+# Public origin of the web app. No trailing slash. For the default Firebase
+# Hosting site this is https://PROJECT_ID.web.app.
+app_url = "https://n7-logo-contest.web.app"
+
+# Container image with an immutable tag. scripts/deploy.sh overrides this on
+# every deploy with the current git short SHA -- the value here is only used
+# if you run `terraform apply` by hand.
+#
+# NOTE the chicken-and-egg on a brand new project: Artifact Registry does not
+# exist until the first apply, so there is no image to point at yet. Either
+# run `terraform apply -target=google_artifact_registry_repository.docker`
+# first and then build, or just let scripts/deploy.sh do it in order.
+api_image = "us-central1-docker.pkg.dev/n7-logo-contest/contest/contest-api:abc1234"
+
+# --- Optional (defaults shown) ----------------------------------------------
+
+region                = "us-central1"
+firestore_location_id = "nam5"
+service_name          = "contest-api"
+
+# The membership test. Comma-separated, no spaces needed.
+allowed_domains = "google.com"
+
+# Leave empty to default to app_url.
+cors_origins = ""
+
+default_contest_id = "north7-2026"
+log_level          = "info"
+
+# Leave empty for "PROJECT_ID-logos".
+bucket_name = ""
+
+artifact_repository_id = "contest"
+
+max_instances                     = 3
+noncurrent_version_retention_days = 30
+
+# Set false ONLY if you are deploying the backend before the DRS org-policy
+# exception has been cleared. With it false, the Hosting /api/** rewrite
+# returns 403 until you flip it back and re-apply.
+allow_public_api_access = true

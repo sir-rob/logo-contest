@@ -1,0 +1,85 @@
+# Docker build context exclusions.
+#
+# The build context is the REPO ROOT (the API is one workspace of an npm
+# monorepo and needs the root lockfile plus packages/shared). Without this
+# file that context would include node_modules and .git, which is hundreds of
+# megabytes shipped to the daemon on every build for no reason.
+#
+# Rule of thumb: if the Dockerfile does not COPY it, it does not belong here.
+
+# --- Dependencies: reinstalled inside the image from the lockfile ----------
+# Critically, a host node_modules may contain platform-specific binaries
+# (sharp's libvips in particular) built for macOS or arm64. Copying those
+# into a linux/amd64 image produces a container that fails at import time.
+node_modules
+**/node_modules
+
+# --- Build output: recompiled in the build stage ---------------------------
+dist
+**/dist
+build
+**/build
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# --- VCS -------------------------------------------------------------------
+.git
+.gitignore
+.github
+
+# --- Infrastructure and tooling: not part of the runtime image -------------
+infra
+scripts
+.firebase
+firebase.json
+.firebaserc
+firestore.rules
+firestore.indexes.json
+storage.rules
+Makefile
+.emulator-data
+
+# --- Docs ------------------------------------------------------------------
+*.md
+LICENSE
+
+# --- Secrets and local config ----------------------------------------------
+# Belt and braces. Nothing in the deployed app reads a .env file (Cloud Run
+# supplies the environment) and the API authenticates with ADC, so a key file
+# should not exist at all -- but a stray one must never end up in a layer.
+.env
+.env.*
+!.env.example
+service-account*.json
+*.pem
+*.key
+
+# --- Tests and coverage ----------------------------------------------------
+coverage
+**/*.test.ts
+**/*.spec.ts
+**/__tests__
+vitest.config.ts
+
+# --- The web app -----------------------------------------------------------
+# The API image has no use for the React source. The web bundle is built on
+# the host and deployed to Firebase Hosting.
+# NOTE: apps/web/package.json is deliberately NOT excluded -- npm needs every
+# workspace manifest present to resolve the workspace graph, and the
+# Dockerfile copies it explicitly.
+apps/web/src
+apps/web/public
+apps/web/index.html
+apps/web/vite.config.ts
+apps/web/tailwind.config.*
+apps/web/postcss.config.*
+
+# --- Editor and OS noise ---------------------------------------------------
+.vscode
+.idea
+.DS_Store
+*.swp
+*.log
+.prettierrc*
+.prettierignore
+.eslintrc*

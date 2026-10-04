@@ -1,0 +1,55 @@
+# Cloud Build config for the API image.
+#
+# WHY THIS FILE EXISTS rather than a plain `gcloud builds submit --tag`:
+#
+#   1. BUILDKIT. apps/api/Dockerfile opens with `# syntax=docker/dockerfile:1.7`
+#      and uses `RUN --mount=type=cache,target=/root/.npm`. Those are BuildKit
+#      features, and Cloud Build's docker builder runs the LEGACY builder
+#      unless DOCKER_BUILDKIT=1 is set in the step's environment. Without it
+#      the build fails on the first cache mount. `--tag` gives no way to set
+#      that env var, so a config file is required.
+#
+#   2. BUILD CONTEXT. The API is one workspace of an npm monorepo and needs the
+#      root lockfile plus packages/shared, so the context must be the REPO
+#      ROOT with `-f apps/api/Dockerfile`. `--tag` would submit apps/api alone
+#      and the COPY of packages/shared would fail.
+#
+#   3. NO LOCAL DOCKER. This machine has no docker binary, so the image cannot
+#      be built locally at all — the build has to happen remotely regardless.
+#
+# Usage:
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_IMAGE=us-east4-docker.pkg.dev/PROJECT/contest/contest-api:TAG,_GIT_SHA=TAG
+#
+# Note on tags: this repo is not a git checkout, so there is no commit SHA to
+# use. Tags are timestamp-based instead. The important property is only that
+# the tag is IMMUTABLE — never "latest" — so a rollback can name an exact
+# image. See the note in scripts/deploy.sh.
+
+substitutions:
+  _IMAGE: ''
+  _GIT_SHA: 'unknown'
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    args:
+      - build
+      - '-f'
+      - 'apps/api/Dockerfile'
+      - '--build-arg'
+      - 'GIT_SHA=${_GIT_SHA}'
+      - '-t'
+      - '${_IMAGE}'
+      - '.'
+
+images:
+  - '${_IMAGE}'
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

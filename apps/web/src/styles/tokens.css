@@ -1,0 +1,144 @@
+/**
+ * Design tokens — Media Moguls (North 7) Logo Design Contest
+ *
+ * The brief: clean, neat, minimalist, sophisticated.
+ *
+ * The discipline that delivers it is restraint, not decoration. Three rules
+ * govern everything below:
+ *
+ *  1. NEAR-MONOCHROME. Warm paper, deep ink, and a graphite scale do all the
+ *     structural work. Colour is not how this interface communicates.
+ *  2. ONE ACCENT, USED SPARINGLY. It marks the primary action and the current
+ *     state. Nothing else. Two accent colours on a screen means one of them is
+ *     wrong.
+ *  3. NO COLOUR-ONLY MEANING. Every state that uses colour also carries a
+ *     label, an icon, or a position. Required for accessibility, and it keeps
+ *     the palette honest.
+ *
+ * Both accents ship as swappable sets. Switch with `data-accent` on <html>.
+ */
+
+:root {
+  /* ---------------------------------------------------------------------
+   * Neutrals — warm, not blue-grey. Paper and ink, with graphite between.
+   * ------------------------------------------------------------------ */
+  --paper: 40 20% 98%; /* #FAFAF8 — warm off-white */
+  --paper-raised: 40 22% 99.5%;
+  --paper-sunken: 40 14% 95.5%;
+
+  --ink: 0 0% 8%; /* #141414 — deep, not pure black */
+  --ink-muted: 30 4% 38%;
+  --ink-subtle: 30 4% 55%;
+  --ink-faint: 30 5% 72%;
+
+  /* Hairlines. Structure comes from 1px rules, not shadows and boxes. */
+  --line: 35 10% 88%;
+  --line-strong: 35 8% 78%;
+
+  /* ---------------------------------------------------------------------
+   * Semantic states. Desaturated so they sit inside the palette rather than
+   * shouting over it.
+   * ------------------------------------------------------------------ */
+  --danger: 4 58% 44%;
+  --danger-soft: 4 60% 96%;
+  --success: 152 40% 30%;
+  --success-soft: 152 36% 95%;
+  --warning: 34 62% 40%;
+  --warning-soft: 34 70% 95%;
+
+  /* ---------------------------------------------------------------------
+   * Typography. A high-contrast serif for display against a neutral
+   * grotesque for UI.
+   *
+   * No webfont fetch: the build has no network, and a contest that hangs on
+   * a font CDN is worse than one set in a system serif. These stacks resolve
+   * to something good on every platform we care about, and a self-hosted
+   * face can be prepended later without touching a component.
+   * ------------------------------------------------------------------ */
+  --font-display: 'Instrument Serif', 'Fraunces', 'Iowan Old Style', 'Palatino Linotype',
+    'Palatino', 'Georgia', ui-serif, serif;
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, monospace;
+
+  /* ---------------------------------------------------------------------
+   * Spacing — 8px grid. Named by intent so layout reads as meaning.
+   * ------------------------------------------------------------------ */
+  --space-hair: 0.25rem; /*  4px */
+  --space-tight: 0.5rem; /*  8px */
+  --space-snug: 0.75rem; /* 12px */
+  --space-base: 1rem; /* 16px */
+  --space-roomy: 1.5rem; /* 24px */
+  --space-loose: 2rem; /* 32px */
+  --space-section: 3rem; /* 48px */
+  --space-page: 5rem; /* 80px */
+
+  /* Radii — restrained. Nothing here is a pill except deliberate badges. */
+  --radius-sm: 3px;
+  --radius: 5px;
+  --radius-lg: 8px;
+
+  /* ---------------------------------------------------------------------
+   * Elevation. Almost absent by design — depth is communicated with space
+   * and a hairline. The two shadows that exist are for genuinely floating
+   * things (dialogs, menus).
+   * ------------------------------------------------------------------ */
+  --shadow-none: none;
+  --shadow-float: 0 1px 2px hsl(var(--ink) / 0.04), 0 8px 24px -8px hsl(var(--ink) / 0.12);
+  --shadow-overlay: 0 2px 4px hsl(var(--ink) / 0.06), 0 24px 48px -12px hsl(var(--ink) / 0.18);
+
+  /* Motion. Short and unfussy. Respect for reduced-motion is in index.css. */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+  --duration-slow: 320ms;
+
+  /* Layout */
+  --measure: 68ch; /* comfortable reading width */
+  --page-max: 1180px;
+}
+
+/* -------------------------------------------------------------------------
+ * ACCENT A — BRONZE (alternate)
+ *
+ * Warm metal against warm paper. Reads as considered and a little editorial;
+ * pairs naturally with the serif display face. Feels like print. Kept as a
+ * swappable option: set `data-accent="bronze"` on <html>.
+ * ---------------------------------------------------------------------- */
+[data-accent='bronze'] {
+  --accent: 28 42% 38%;
+  --accent-hover: 28 44% 32%;
+  --accent-active: 28 46% 27%;
+  --accent-soft: 30 42% 94%;
+  --accent-ring: 28 42% 38%;
+  --accent-contrast: 40 30% 98%;
+}
+
+/* -------------------------------------------------------------------------
+ * ACCENT B — DEEP TEAL  ★ DEFAULT (chosen 2026-09-13)
+ *
+ * Cooler and quieter, and it separates more from the warm neutrals — which is
+ * exactly why it was picked: primary actions read unambiguously as actions
+ * against the paper background.
+ *
+ * This is the `:root` default, so the app is teal with no attribute set.
+ * ---------------------------------------------------------------------- */
+:root,
+[data-accent='teal'] {
+  --accent: 186 58% 24%;
+  --accent-hover: 186 60% 19%;
+  --accent-active: 186 62% 15%;
+  --accent-soft: 186 38% 94%;
+  --accent-ring: 186 58% 24%;
+  --accent-contrast: 180 30% 98%;
+}
+
+/* -------------------------------------------------------------------------
+ * Focus ring. One definition, used everywhere, always visible.
+ * A keyboard user must never have to guess where they are — and on the
+ * ballot screen, keyboard IS a first-class input, not a fallback.
+ * ---------------------------------------------------------------------- */
+:root {
+  --ring-width: 2px;
+  --ring-offset: 2px;
+}
