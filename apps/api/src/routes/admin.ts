@@ -17,18 +17,23 @@
  * leaking a field to a client.
  */
 
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { FieldValue, type UpdateData } from 'firebase-admin/firestore';
 import {
   ApiError,
   AuditRowSchema,
   ContestPublicSchema,
+  CreateContestSchema,
+  DEFAULT_MIN_BALLOTS_TO_PUBLISH,
   DisqualifySchema,
+  MAX_RANKS,
   ModerationSubmissionSchema,
   SetPhaseSchema,
   TurnoutRowSchema,
   UpdateContestSchema,
   UserSchema,
+  normaliseContestCode,
   validateContestDates,
   type AuditRowDto,
   type Contest,
@@ -52,7 +57,14 @@ import {
 import { fromIso, timestampsToDates, toIso } from '../db/converters.js';
 import { principalOf } from '../plugins/auth.js';
 import { auditToDto, isAuditAction, writeAudit } from '../services/audit.js';
-import { contestToDto, loadContest, loadDefaultContest, phaseOf } from '../services/contest.js';
+import {
+  contestToDto,
+  listAllContests,
+  loadContest,
+  loadRequestContest,
+  phaseOf,
+  resolveContestId,
+} from '../services/contest.js';
 import { toModerationDto } from '../services/submission-dto.js';
 
 // ---------------------------------------------------------------------------
@@ -210,7 +222,101 @@ const AUDIT_PAGE_LIMIT = 500;
 // Routes
 // ---------------------------------------------------------------------------
 
+/** Slugify a contest title into a clean document ID. */
+export function slugifyContestTitle(title: string): string {
+  const base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  const suffix = randomBytes(3).toString('hex');
+  return base ? `${base}-${suffix}` : `contest-${suffix}`;
+}
+
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * POST /admin/contests — create a new contest with a unique access code.
+   */
+  app.post('/admin/contests', { preHandler: app.requireAdmin }, async (request): Promise<ContestPublicDto> => {
+    const principal = principalOf(request);
+    const body = CreateContestSchema.parse(request.body);
+    const config = getConfig();
+    const timestamp = now(config);
+
+    const code = normaliseContestCode(body.code);
+    const existingContests = await listAllContests();
+    if (existingContests.some((c) => normaliseContestCode(c.code) === code)) {
+      throw new ApiError('CONTEST_CODE_TAKEN', undefined, {
+        code: 'Another contest is already using that code.',
+      });
+    }
+
+    const contestId = body.id?.trim() || slugifyContestTitle(body.title);
+    if (existingContests.some((c) => c.id === contestId)) {
+      throw new ApiError('CONFLICT', 'A contest with that ID already exists.', {
+        id: 'A contest with that ID already exists.',
+      });
+    }
+
+    const mergedDates = mergeContestDates(
+      {
+        submissionsOpenAt: null,
+        submissionsCloseAt: null,
+        votingOpensAt: null,
+        votingClosesAt: null,
+      },
+      body,
+    );
+    assertContestDatesValid(mergedDates);
+
+    const created: Contest = {
+      id: contestId,
+      title: body.title.trim(),
+      description: body.description ?? '',
+      code,
+      phaseOverride: null,
+      submissionsOpenAt: mergedDates.submissionsOpenAt,
+      submissionsCloseAt: mergedDates.submissionsCloseAt,
+      votingOpensAt: mergedDates.votingOpensAt,
+      votingClosesAt: mergedDates.votingClosesAt,
+      resultsPublishedAt: null,
+      maxRanks: body.maxRanks ?? MAX_RANKS,
+      allowSelfVote: body.allowSelfVote ?? true,
+      showLiveStandings: body.showLiveStandings ?? true,
+      minBallotsToPublish: body.minBallotsToPublish ?? DEFAULT_MIN_BALLOTS_TO_PUBLISH,
+      tieBreakSeed: randomBytes(16).toString('hex'),
+      aliasesAssignedAt: null,
+      createdBy: principal.uid,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    await contestDoc(contestId).set(created);
+
+    const existingIds = principal.user.registeredContestIds ?? [];
+    if (!existingIds.includes(contestId)) {
+      await userDoc(principal.uid).update({
+        registeredContestIds: [...existingIds, contestId],
+      });
+    }
+
+    await writeAudit(
+      {
+        contestId,
+        actorUid: principal.uid,
+        actorEmail: principal.email,
+        action: 'contest.create',
+        targetType: 'contest',
+        targetId: contestId,
+        metadata: { title: created.title, code: created.code },
+      },
+      request.log,
+    );
+
+    const refreshed = await loadContest(contestId);
+    return ContestPublicSchema.parse(contestToDto(refreshed, config));
+  });
+
   /**
    * PATCH /admin/contest — edit the timeline and the config knobs.
    *
@@ -222,7 +328,20 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const principal = principalOf(request);
     const body = UpdateContestSchema.parse(request.body);
     const config = getConfig();
-    const existing = await loadDefaultContest(config);
+    const existing = await loadRequestContest(request, principal, config);
+
+    let nextCode: string | undefined;
+    if (body.code !== undefined) {
+      nextCode = normaliseContestCode(body.code);
+      if (nextCode !== normaliseContestCode(existing.code)) {
+        const all = await listAllContests();
+        if (all.some((c) => c.id !== existing.id && normaliseContestCode(c.code) === nextCode)) {
+          throw new ApiError('CONTEST_CODE_TAKEN', undefined, {
+            code: 'Another contest is already using that code.',
+          });
+        }
+      }
+    }
 
     const mergedDates = mergeContestDates(existing, body);
     assertContestDatesValid(mergedDates);
@@ -230,6 +349,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const before: Record<string, string | number | boolean | null> = {
       title: existing.title,
       description: existing.description,
+      code: existing.code,
       submissionsOpenAt: toIso(existing.submissionsOpenAt),
       submissionsCloseAt: toIso(existing.submissionsCloseAt),
       votingOpensAt: toIso(existing.votingOpensAt),
@@ -241,6 +361,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const after: Record<string, string | number | boolean | null> = {
       title: body.title ?? existing.title,
       description: body.description ?? existing.description,
+      code: nextCode ?? existing.code,
       submissionsOpenAt: toIso(mergedDates.submissionsOpenAt),
       submissionsCloseAt: toIso(mergedDates.submissionsCloseAt),
       votingOpensAt: toIso(mergedDates.votingOpensAt),
@@ -255,6 +376,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const update: UpdateData<Contest> = { updatedAt: now(config) };
     if (body.title !== undefined) update.title = body.title;
     if (body.description !== undefined) update.description = body.description;
+    if (nextCode !== undefined) update.code = nextCode;
     if (body.submissionsOpenAt !== undefined) update.submissionsOpenAt = mergedDates.submissionsOpenAt;
     if (body.submissionsCloseAt !== undefined) update.submissionsCloseAt = mergedDates.submissionsCloseAt;
     if (body.votingOpensAt !== undefined) update.votingOpensAt = mergedDates.votingOpensAt;
@@ -297,7 +419,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const principal = principalOf(request);
     const { phase } = SetPhaseSchema.parse(request.body);
     const config = getConfig();
-    const existing = await loadDefaultContest(config);
+    const existing = await loadRequestContest(request, principal, config);
 
     const from = existing.phaseOverride;
     // What the clock alone would say, recorded so the log explains what the
@@ -348,7 +470,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     async (request): Promise<{ submissions: ModerationSubmissionDto[] }> => {
       const principal = principalOf(request);
       const config = getConfig();
-      const contestId = config.defaultContestId;
+      const contestId = resolveContestId(request, config);
 
       // Every status: moderation needs to see withdrawn and already
       // disqualified entries, not just the standing ones.
@@ -516,9 +638,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/admin/turnout',
     { preHandler: app.requireAdmin },
-    async (): Promise<{ rows: TurnoutRowDto[]; eligible: number; voted: number }> => {
+    async (request): Promise<{ rows: TurnoutRowDto[]; eligible: number; voted: number }> => {
       const config = getConfig();
-      const contestId = config.defaultContestId;
+      const contestId = resolveContestId(request, config);
 
       const [userSnap, ballotSnap, submissionSnap] = await Promise.all([
         usersCol().get(),
@@ -542,20 +664,26 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         if (typeof ownerUid === 'string') submittedUids.add(ownerUid);
       }
 
+      const allUsers = userSnap.docs.map((doc) => doc.data());
+      const registeredUsers = allUsers.filter(
+        (u) =>
+          u.registeredContestIds?.includes(contestId) ||
+          votedUids.has(u.uid) ||
+          submittedUids.has(u.uid),
+      );
+      const targetUsers = registeredUsers.length > 0 ? registeredUsers : allUsers;
+
       // A row exists for every eligible member, voted or not — the non-voters
       // are the reason this view exists.
-      const rows: TurnoutRowDto[] = userSnap.docs.map((doc) => {
-        const user = doc.data();
-        return {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          role: user.role,
-          hasSubmitted: submittedUids.has(user.uid),
-          hasVoted: votedUids.has(user.uid),
-          lastSeenAt: toIso(user.lastSeenAt),
-        };
-      });
+      const rows: TurnoutRowDto[] = targetUsers.map((user) => ({
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        hasSubmitted: submittedUids.has(user.uid),
+        hasVoted: votedUids.has(user.uid),
+        lastSeenAt: toIso(user.lastSeenAt),
+      }));
 
       const sorted = sortTurnout(rows).map((row) => TurnoutRowSchema.parse(row));
       return {
@@ -567,7 +695,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /** GET /admin/audit — the accountability record, most recent first. */
-  app.get<{ Querystring: { action?: string } }>(
+  app.get<{ Querystring: { action?: string; contestId?: string } }>(
     '/admin/audit',
     { preHandler: app.requireAdmin },
     async (request): Promise<{ rows: AuditRowDto[] }> => {
@@ -575,11 +703,13 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       if (actionFilter !== undefined && !isAuditAction(actionFilter)) {
         throw new ApiError('VALIDATION_FAILED', 'Unknown audit action.', { action: 'Unknown audit action.' });
       }
+      const contestFilter = request.query.contestId?.trim();
 
       const snap = await auditLogsCol().orderBy('at', 'desc').limit(AUDIT_PAGE_LIMIT).get();
       const entries = snap.docs
         .map((doc) => doc.data())
-        .filter((entry) => actionFilter === undefined || entry.action === actionFilter);
+        .filter((entry) => actionFilter === undefined || entry.action === actionFilter)
+        .filter((entry) => !contestFilter || entry.contestId === contestFilter || entry.contestId === null);
 
       return { rows: entries.map((entry) => AuditRowSchema.parse(auditToDto(entry))) };
     },

@@ -1,15 +1,17 @@
 /**
- * The one place the contest's name is written down.
+ * Application-wide branding constants.
  *
- * The contest document carries a `title` an admin can edit, and the header
- * prefers it once it has loaded. This is the name shown before that — on the
- * sign-in screen, where there is no session and therefore no contest fetch.
+ * Individual contests carry their own `title` and `description` in Firestore.
+ * These constants provide the generic platform branding shown before a contest
+ * is selected (or on the sign-in and top-level contests screens).
  */
 
-export const CONTEST_NAME: string =
-  import.meta.env.VITE_CONTEST_NAME ?? 'Media Moguls \u2014 North 7 Logo Contest';
+export const PLATFORM_NAME: string =
+  import.meta.env.VITE_APP_NAME ?? import.meta.env.VITE_CONTEST_NAME ?? 'Team Contests';
 
-export const CONTEST_SHORT_NAME = 'North 7';
+export const CONTEST_NAME: string = PLATFORM_NAME;
+
+export const CONTEST_SHORT_NAME = 'Contests';
 
 /** The quiet line in the footer. Sets expectations without nagging. */
 export const FOOTER_NOTE =

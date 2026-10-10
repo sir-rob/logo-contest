@@ -118,6 +118,7 @@ export function makeMe(overrides: Partial<MeDto> = {}): MeDto {
     email: 'viewer@google.com',
     displayName: 'Viewer',
     role: 'member',
+    registeredContestIds: ['contest-1'],
     mySubmission: null,
     myBallot: null,
     ...overrides,

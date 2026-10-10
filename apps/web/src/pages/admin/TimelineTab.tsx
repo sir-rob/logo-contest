@@ -52,6 +52,7 @@ interface TimelineTabProps {
 interface FormState {
   title: string;
   description: string;
+  code: string;
   submissionsOpenAt: string;
   submissionsCloseAt: string;
   votingOpensAt: string;
@@ -65,6 +66,7 @@ function initialState(contest: ContestPublicDto): FormState {
   return {
     title: contest.title,
     description: contest.description,
+    code: contest.code ?? 'NORTH7',
     submissionsOpenAt: isoToLocalInput(contest.submissionsOpenAt),
     submissionsCloseAt: isoToLocalInput(contest.submissionsCloseAt),
     votingOpensAt: isoToLocalInput(contest.votingOpensAt),
@@ -186,8 +188,14 @@ export function TimelineTab({ contest }: TimelineTabProps): JSX.Element {
       : '';
 
   const titleError = form.title.trim() === '' ? 'The contest needs a title.' : '';
+  const codeError =
+    form.code.trim().length < 2
+      ? 'Enter a unique contest code (at least 2 characters).'
+      : !/^[A-Za-z0-9_-]+$/.test(form.code.trim())
+        ? 'Code may only contain letters, numbers, hyphens, or underscores.'
+        : '';
 
-  const blocked = dateErrors.length > 0 || floorError !== '' || titleError !== '';
+  const blocked = dateErrors.length > 0 || floorError !== '' || titleError !== '' || codeError !== '';
 
   const mutation = useMutation({
     mutationFn: (body: UpdateContestBody) => api.admin.updateContest(body),
@@ -196,6 +204,7 @@ export function TimelineTab({ contest }: TimelineTabProps): JSX.Element {
       queryClient.setQueryData(queryKeys.contest, updated);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.contest }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.contests }),
         queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }),
       ]);
       toast.success('Timeline and settings saved.');
@@ -212,6 +221,7 @@ export function TimelineTab({ contest }: TimelineTabProps): JSX.Element {
     mutation.mutate({
       title: form.title.trim(),
       description: form.description,
+      code: form.code.trim().toUpperCase(),
       submissionsOpenAt: localInputToIso(form.submissionsOpenAt),
       submissionsCloseAt: localInputToIso(form.submissionsCloseAt),
       votingOpensAt: localInputToIso(form.votingOpensAt),
@@ -336,23 +346,40 @@ export function TimelineTab({ contest }: TimelineTabProps): JSX.Element {
       </Panel>
 
       <Panel>
-        <PanelHeader eyebrow="Presentation" title="Title and description" />
+        <PanelHeader eyebrow="Presentation & access" title="Title, registration code and description" />
         <Divider />
         <div className="space-y-roomy p-roomy">
-          <Field
-            label="Contest title"
-            htmlFor="contest-title"
-            required
-            error={titleError || serverFieldErrors['title'] || undefined}
-          >
-            <Input
-              id="contest-title"
-              value={form.title}
-              maxLength={120}
-              onChange={(event) => set('title', event.target.value)}
-            />
-            <CharCount value={form.title} max={120} />
-          </Field>
+          <div className="grid gap-roomy sm:grid-cols-2">
+            <Field
+              label="Contest title"
+              htmlFor="contest-title"
+              required
+              error={titleError || serverFieldErrors['title'] || undefined}
+            >
+              <Input
+                id="contest-title"
+                value={form.title}
+                maxLength={120}
+                onChange={(event) => set('title', event.target.value)}
+              />
+              <CharCount value={form.title} max={120} />
+            </Field>
+
+            <Field
+              label="Unique contest code"
+              htmlFor="contest-code"
+              required
+              hint="Share this code with participants so they can register for this contest."
+              error={codeError || serverFieldErrors['code'] || undefined}
+            >
+              <Input
+                id="contest-code"
+                value={form.code}
+                maxLength={32}
+                onChange={(event) => set('code', event.target.value.toUpperCase())}
+              />
+            </Field>
+          </div>
 
           <Field
             label="Description"

@@ -14,6 +14,7 @@ import { ApiClientError } from './api';
 export const queryKeys = {
   me: ['me'] as const,
   contest: ['contest'] as const,
+  contests: ['contests'] as const,
   submissions: ['submissions'] as const,
   ballot: ['ballot'] as const,
   dashboard: ['dashboard'] as const,

@@ -2,7 +2,14 @@ import { z } from 'zod';
 import { ContestPhaseSchema } from './phases.js';
 import { RoleSchema, SubmissionStatusSchema } from './entities.js';
 import { ResultSnapshotSchema } from './results.js';
-import { MAX_DESCRIPTION_LENGTH, MAX_DISPLAY_NAME_LENGTH, MAX_RANKS, MAX_TITLE_LENGTH } from './constants.js';
+import {
+  MAX_CONTEST_CODE_LENGTH,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_RANKS,
+  MAX_TITLE_LENGTH,
+  MIN_CONTEST_CODE_LENGTH,
+} from './constants.js';
 
 /**
  * API data-transfer objects.
@@ -63,6 +70,8 @@ export const MeSchema = z.object({
   email: z.string().email(),
   displayName: z.string(),
   role: RoleSchema,
+  /** Contests the caller has registered for. */
+  registeredContestIds: z.array(z.string()).default([]),
   /** The caller's own entry, or null. */
   mySubmission: PublicSubmissionSchema.nullable(),
   /** The caller's own ranking. Only ever their own. */
@@ -78,6 +87,8 @@ export const ContestPublicSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string(),
+  /** Unique contest registration code. */
+  code: z.string().optional(),
   phase: ContestPhaseSchema,
   submissionsOpenAt: z.string().datetime().nullable(),
   submissionsCloseAt: z.string().datetime().nullable(),
@@ -168,9 +179,52 @@ export const SaveBallotSchema = z.object({
 });
 export type SaveBallotBody = z.infer<typeof SaveBallotSchema>;
 
+export const JoinContestSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(MIN_CONTEST_CODE_LENGTH, 'Enter a valid contest code.')
+    .max(MAX_CONTEST_CODE_LENGTH, `Contest code must be at most ${MAX_CONTEST_CODE_LENGTH} characters.`),
+});
+export type JoinContestBody = z.infer<typeof JoinContestSchema>;
+
+export const CreateContestSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .min(2)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/, 'Contest ID may only contain lowercase letters, numbers and hyphens.')
+    .optional(),
+  title: z.string().trim().min(1, 'Give the contest a title.').max(120),
+  description: z.string().max(2000).optional(),
+  code: z
+    .string()
+    .trim()
+    .min(MIN_CONTEST_CODE_LENGTH, `Code must be at least ${MIN_CONTEST_CODE_LENGTH} characters.`)
+    .max(MAX_CONTEST_CODE_LENGTH, `Code must be at most ${MAX_CONTEST_CODE_LENGTH} characters.`)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Code may only use letters, numbers, hyphens or underscores.'),
+  submissionsOpenAt: z.string().datetime().nullable().optional(),
+  submissionsCloseAt: z.string().datetime().nullable().optional(),
+  votingOpensAt: z.string().datetime().nullable().optional(),
+  votingClosesAt: z.string().datetime().nullable().optional(),
+  maxRanks: z.number().int().min(1).max(MAX_RANKS).optional(),
+  allowSelfVote: z.boolean().optional(),
+  showLiveStandings: z.boolean().optional(),
+  minBallotsToPublish: z.number().int().min(1).optional(),
+});
+export type CreateContestBody = z.infer<typeof CreateContestSchema>;
+
 export const UpdateContestSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
+  code: z
+    .string()
+    .trim()
+    .min(MIN_CONTEST_CODE_LENGTH, `Code must be at least ${MIN_CONTEST_CODE_LENGTH} characters.`)
+    .max(MAX_CONTEST_CODE_LENGTH, `Code must be at most ${MAX_CONTEST_CODE_LENGTH} characters.`)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Code may only use letters, numbers, hyphens or underscores.')
+    .optional(),
   submissionsOpenAt: z.string().datetime().nullable().optional(),
   submissionsCloseAt: z.string().datetime().nullable().optional(),
   votingOpensAt: z.string().datetime().nullable().optional(),

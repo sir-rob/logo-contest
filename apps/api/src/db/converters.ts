@@ -99,7 +99,19 @@ export function uidConverterFor<TSchema extends z.ZodTypeAny>(
   };
 }
 
-export const userConverter = uidConverterFor<typeof UserSchema>(UserSchema) as FirestoreDataConverter<User>;
+export const userConverter: FirestoreDataConverter<User> = {
+  toFirestore(model: User): DocumentData {
+    const { uid: _uid, ...rest } = model as Record<string, unknown>;
+    return datesToTimestamps(rest) as DocumentData;
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): User {
+    const raw = timestampsToDates(snapshot.data()) as Record<string, unknown>;
+    const registeredContestIds = Array.isArray(raw['registeredContestIds'])
+      ? raw['registeredContestIds']
+      : [process.env['DEFAULT_CONTEST_ID'] || 'media-moguls-2026'];
+    return UserSchema.parse({ ...raw, registeredContestIds, uid: snapshot.id });
+  },
+};
 export const contestConverter = converterFor<typeof ContestSchema>(ContestSchema) as FirestoreDataConverter<Contest>;
 export const submissionConverter = converterFor<typeof SubmissionSchema>(
   SubmissionSchema,

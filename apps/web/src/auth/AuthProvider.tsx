@@ -17,7 +17,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import type { MeDto } from '@contest/shared';
-import { api, ApiClientError } from '../lib/api';
+import { api, ApiClientError, setActiveContestId } from '../lib/api';
 import {
   completeMagicLink,
   getFirebaseAuth,
@@ -26,6 +26,8 @@ import {
   sendMagicLink,
   signOutUser,
 } from '../lib/firebase';
+
+const CONTEST_CODE_STORAGE_KEY = 'n7.signin.contestCode';
 
 export type AuthStatus = 'loading' | 'signed-out' | 'signed-in' | 'rejected';
 
@@ -56,6 +58,21 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
   /** Exchange a Firebase session for our own view of the caller. */
   const loadMe = useCallback(async (): Promise<void> => {
     try {
+      let pendingCode: string | null = null;
+      try {
+        pendingCode = window.localStorage.getItem(CONTEST_CODE_STORAGE_KEY);
+        if (pendingCode) window.localStorage.removeItem(CONTEST_CODE_STORAGE_KEY);
+      } catch {
+        pendingCode = null;
+      }
+      if (pendingCode && typeof api.joinContest === 'function') {
+        try {
+          const joined = await api.joinContest(pendingCode);
+          setActiveContestId(joined.id);
+        } catch {
+          // Ignore invalid code during automatic sign-in registration.
+        }
+      }
       const profile = await api.me();
       setMe(profile);
       setRejectionReason(null);

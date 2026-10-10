@@ -28,7 +28,7 @@ import { getDb } from '../firebase.js';
 import { usersCol } from '../db/collections.js';
 import { toIso } from '../db/converters.js';
 import { principalOf } from '../plugins/auth.js';
-import { assertCanViewResults, loadDefaultContest, phaseOf } from '../services/contest.js';
+import { assertCanViewResults, loadRequestContest, phaseOf } from '../services/contest.js';
 import { toPublicDtos } from '../services/submission-dto.js';
 import { writeAudit } from '../services/audit.js';
 import { ballotsToCsv } from '../services/csv.js';
@@ -79,17 +79,20 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.get('/dashboard', { preHandler: app.requireAuth }, async (request): Promise<DashboardDto> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
     const phase = phaseOf(contest, config);
 
-    const [candidates, eligibleVotersAgg, ballotsCast, iHaveVoted] = await Promise.all([
+    const [candidates, allUsersSnap, ballotsCast, iHaveVoted] = await Promise.all([
       loadCandidateSubmissions(contest.id),
-      usersCol().count().get(),
+      usersCol().get(),
       countBallotsCast(contest.id),
       hasVoted(contest.id, principal.uid),
     ]);
 
-    const eligibleVoters = eligibleVotersAgg.data().count;
+    const registeredUsersCount = allUsersSnap.docs.filter((doc) =>
+      doc.data().registeredContestIds?.includes(contest.id),
+    ).length;
+    const eligibleVoters = registeredUsersCount > 0 ? registeredUsersCount : allUsersSnap.size;
     const iHaveSubmitted = candidates.some((c) => c.ownerUid === principal.uid);
 
     // ---------------------------------------------------------------------
@@ -152,7 +155,7 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.get('/results', { preHandler: app.requireAuth }, async (request): Promise<ResultsDto> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
 
     // PHASE_RESULTS_NOT_PUBLISHED. Members see results when they are
     // published, not when they are computed.
@@ -170,7 +173,7 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.post('/admin/results/compute', { preHandler: app.requireAdmin }, async (request): Promise<ResultsDto> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
 
     // Computing does NOT publish: an admin looks first, members see it only
     // after an explicit, separately audited publish.
@@ -206,7 +209,7 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.post('/admin/results/publish', { preHandler: app.requireAdmin }, async (request): Promise<{ ok: true }> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
 
     await publishResults(contest.id, { uid: principal.uid, email: principal.email }, config);
     return { ok: true };
@@ -218,7 +221,7 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.post('/admin/results/unpublish', { preHandler: app.requireAdmin }, async (request): Promise<{ ok: true }> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
 
     await unpublishResults(contest.id, { uid: principal.uid, email: principal.email }, config);
     return { ok: true };
@@ -230,7 +233,7 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.post('/admin/results/resolve-tie', { preHandler: app.requireAdmin }, async (request): Promise<ResultsDto> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
 
     const parsed = ResolveTieSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -278,7 +281,7 @@ export async function registerResultsRoutes(app: FastifyInstance): Promise<void>
   app.get('/admin/export/ballots.csv', { preHandler: app.requireAdmin }, async (request, reply): Promise<string> => {
     const principal = principalOf(request);
     const config = getConfig();
-    const contest = await loadDefaultContest(config);
+    const contest = await loadRequestContest(request, principal, config);
 
     // `loadCountableBallots` is the anonymised reader: rankings only, ordered
     // by a hash of the ranking. Nothing here ever holds a voter.

@@ -87,6 +87,7 @@ describe('C8 — admin routes refuse a valid member token', () => {
     for (const expected of [
       '/api/admin/users',
       '/api/admin/users/:uid/role',
+      '/api/admin/contests',
       '/api/admin/contest',
       '/api/admin/contest/phase',
       '/api/admin/submissions',

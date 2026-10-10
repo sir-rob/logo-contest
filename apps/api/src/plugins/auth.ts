@@ -91,6 +91,7 @@ export async function loadOrCreateUser(
       email,
       displayName: tokenName?.trim() || displayNameFromEmail(email),
       role: isBootstrapAdmin ? 'admin' : 'member',
+      registeredContestIds: [],
       createdAt: timestamp,
       lastSeenAt: timestamp,
     };
@@ -112,10 +113,28 @@ export async function loadOrCreateUser(
 
   // Touch `lastSeenAt` at most once a minute — the turnout view wants
   // "recently active", not a write on every poll of the dashboard.
-  if (timestamp.getTime() - existing.lastSeenAt.getTime() > 60_000) {
+  const rawExisting = snap.data() as User;
+  // Backfill registeredContestIds in Firestore for pre-existing North 7 users
+  // whose user document predates multi-contest registration.
+  const snapHasField = (snap as unknown as { get?: (f: string) => unknown }).get
+    ? (snap as unknown as { get: (f: string) => unknown }).get('registeredContestIds') !== undefined
+    : true;
+
+  if (!snapHasField) {
+    const backfilledIds = rawExisting.registeredContestIds?.length
+      ? rawExisting.registeredContestIds
+      : [config.defaultContestId];
+    await ref.update({
+      registeredContestIds: backfilledIds,
+      lastSeenAt: timestamp,
+    });
+    return { ...rawExisting, registeredContestIds: backfilledIds, lastSeenAt: timestamp };
+  }
+
+  if (timestamp.getTime() - rawExisting.lastSeenAt.getTime() > 60_000) {
     await ref.update({ lastSeenAt: timestamp });
   }
-  return { ...existing, lastSeenAt: timestamp };
+  return { ...rawExisting, lastSeenAt: timestamp };
 }
 
 async function plugin(app: FastifyInstance): Promise<void> {

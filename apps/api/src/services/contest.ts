@@ -1,5 +1,5 @@
 /**
- * Contest loading and phase gating.
+ * Contest loading, multi-contest resolution and phase gating.
  *
  * Every route that cares about "is this allowed right now" comes through here,
  * and this module in turn defers to `derivePhase` from `@contest/shared` — the
@@ -7,6 +7,7 @@
  * phase it is, and both sides import it.
  */
 
+import type { FastifyRequest } from 'fastify';
 import {
   ApiError,
   canSubmit,
@@ -19,8 +20,9 @@ import {
   type ContestPublicDto,
 } from '@contest/shared';
 import { getConfig, now, type AppConfig } from '../config.js';
-import { contestDoc } from '../db/collections.js';
+import { contestDoc, contestsCol } from '../db/collections.js';
 import { toIso } from '../db/converters.js';
+import type { AuthedPrincipal } from '../plugins/auth.js';
 
 export async function loadContest(contestId: string): Promise<Contest> {
   const snap = await contestDoc(contestId).get();
@@ -29,9 +31,86 @@ export async function loadContest(contestId: string): Promise<Contest> {
   return contest;
 }
 
-/** The default contest for this deployment — the app runs one at a time. */
+/**
+ * Resolve which contest a request is targeting (`?contestId=...` or header
+ * `x-contest-id`, falling back to `config.defaultContestId`).
+ */
+export function resolveContestId(
+  request: FastifyRequest,
+  config: AppConfig = getConfig(),
+): string {
+  const query = request.query as Record<string, unknown> | undefined;
+  const fromQuery = typeof query?.['contestId'] === 'string' ? query['contestId'].trim() : '';
+  if (fromQuery.length > 0) return fromQuery;
+
+  const header = request.headers['x-contest-id'];
+  const fromHeader = typeof header === 'string' ? header.trim() : '';
+  if (fromHeader.length > 0) return fromHeader;
+
+  return config.defaultContestId;
+}
+
+/**
+ * Does the caller have access to this contest?
+ *
+ *   - Administrators can see and manage every contest.
+ *   - Members can access any contest they have registered for with its unique
+ *     contest code (`user.registeredContestIds`), plus the deployment's
+ *     legacy default contest if their user record has no conflicting
+ *     restriction when using default fallback routes.
+ */
+export function canAccessContest(
+  principal: AuthedPrincipal,
+  contestId: string,
+  config: AppConfig = getConfig(),
+): boolean {
+  if (principal.role === 'admin') return true;
+  if (principal.user.registeredContestIds.includes(contestId)) return true;
+  // Backward-compatible access for existing/default contest when no other
+  // registrations have been explicitly restricted:
+  if (contestId === config.defaultContestId && principal.user.registeredContestIds.length === 0) {
+    return true;
+  }
+  return false;
+}
+
+export function assertCanAccessContest(
+  principal: AuthedPrincipal,
+  contestId: string,
+  config: AppConfig = getConfig(),
+): void {
+  if (!canAccessContest(principal, contestId, config)) {
+    throw new ApiError('CONTEST_ACCESS_REQUIRED');
+  }
+}
+
+/**
+ * Load the contest targeted by `request` and verify the caller is allowed to
+ * access it.
+ */
+export async function loadRequestContest(
+  request: FastifyRequest,
+  principal?: AuthedPrincipal,
+  config: AppConfig = getConfig(),
+): Promise<Contest> {
+  const contestId = resolveContestId(request, config);
+  if (principal) {
+    assertCanAccessContest(principal, contestId, config);
+  }
+  return loadContest(contestId);
+}
+
+/** The default contest for this deployment — fallback when no contestId is specified. */
 export async function loadDefaultContest(config: AppConfig = getConfig()): Promise<Contest> {
   return loadContest(config.defaultContestId);
+}
+
+/** List all contests in Firestore, newest first. */
+export async function listAllContests(): Promise<Contest[]> {
+  const snap = await contestsCol().get();
+  const contests = snap.docs.map((doc) => doc.data());
+  contests.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return contests;
 }
 
 export function phaseOf(contest: Contest, config: AppConfig = getConfig()): ContestPhase {
@@ -53,6 +132,15 @@ export async function loadContestWithPhase(
   config: AppConfig = getConfig(),
 ): Promise<{ contest: Contest; phase: ContestPhase }> {
   const contest = await loadContest(contestId);
+  return { contest, phase: phaseOf(contest, config) };
+}
+
+export async function loadRequestContestWithPhase(
+  request: FastifyRequest,
+  principal?: AuthedPrincipal,
+  config: AppConfig = getConfig(),
+): Promise<{ contest: Contest; phase: ContestPhase }> {
+  const contest = await loadRequestContest(request, principal, config);
   return { contest, phase: phaseOf(contest, config) };
 }
 
@@ -92,6 +180,7 @@ export function contestToDto(contest: Contest, config: AppConfig = getConfig()):
     id: contest.id,
     title: contest.title,
     description: contest.description,
+    code: contest.code,
     phase: phaseOf(contest, config),
     submissionsOpenAt: toIso(contest.submissionsOpenAt),
     submissionsCloseAt: toIso(contest.submissionsCloseAt),

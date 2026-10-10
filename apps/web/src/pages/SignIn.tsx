@@ -27,6 +27,21 @@ import { classifyAuthError, formatRetryAfter, type AuthFailure } from '@/lib/aut
 import { domainHintFor, formatAllowedDomains, looksLikeEmail } from '@/lib/email-domain';
 import { takeReturnTo } from '@/lib/return-to';
 
+const CONTEST_CODE_STORAGE_KEY = 'n7.signin.contestCode';
+
+function savePendingContestCode(code: string): void {
+  try {
+    const trimmed = code.trim().toUpperCase();
+    if (trimmed.length > 0) {
+      window.localStorage.setItem(CONTEST_CODE_STORAGE_KEY, trimmed);
+    } else {
+      window.localStorage.removeItem(CONTEST_CODE_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
 /** The server allows 3 links per 15 minutes. 60s between clicks keeps people well inside that. */
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -75,6 +90,7 @@ export function SignIn(): JSX.Element {
   const prefill = (location.state as SignInLocationState | null)?.email ?? '';
 
   const [email, setEmail] = useState(prefill);
+  const [contestCode, setContestCode] = useState('');
   const [stage, setStage] = useState<Stage>('form');
   const [sentTo, setSentTo] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -97,6 +113,7 @@ export function SignIn(): JSX.Element {
       setSubmitting(true);
       setFailure(null);
       try {
+        savePendingContestCode(contestCode);
         await requestLink(address);
         setSentTo(address.trim().toLowerCase());
         setStage('sent');
@@ -116,7 +133,7 @@ export function SignIn(): JSX.Element {
         setSubmitting(false);
       }
     },
-    [requestLink, startCooldown],
+    [contestCode, requestLink, startCooldown],
   );
 
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
@@ -300,6 +317,28 @@ export function SignIn(): JSX.Element {
             }}
           />
         </Field>
+
+        <div className="mt-base">
+          <Field
+            label="Contest code"
+            htmlFor="signin-contest-code"
+            hint="If an organizer shared a contest code with you, enter it here to register automatically."
+          >
+            <Input
+              id="signin-contest-code"
+              name="contestCode"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="e.g. NORTH7"
+              value={contestCode}
+              disabled={submitting}
+              onChange={(event) => {
+                setContestCode(event.target.value.toUpperCase());
+              }}
+            />
+          </Field>
+        </div>
 
         {failure?.kind === 'rate-limited' ? (
           <RateLimitNotice failure={failure} />

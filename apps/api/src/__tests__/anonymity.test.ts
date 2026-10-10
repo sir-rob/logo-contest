@@ -268,7 +268,7 @@ describe('A2 — recursive sweep over every member-facing route', () => {
     // Named here purely so a regression that stops registering a route is
     // visible as a diff rather than as a silently smaller sweep.
     expect(swept.sort()).toEqual(
-      ['/api/ballot', '/api/contest', '/api/dashboard', '/api/me', '/api/results', '/api/submissions'].sort(),
+      ['/api/ballot', '/api/contest', '/api/contests', '/api/dashboard', '/api/me', '/api/results', '/api/submissions'].sort(),
     );
   });
 

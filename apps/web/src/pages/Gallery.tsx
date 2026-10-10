@@ -122,8 +122,8 @@ export function Gallery(): JSX.Element {
           title="No entries yet."
           description={
             submissionsOpen
-              ? 'Nobody has uploaded a logo. Being first is not a disadvantage — entries are shuffled and numbered only once submissions close.'
-              : 'No logos were submitted for this contest.'
+              ? 'Nobody has uploaded an entry yet. Being first is not a disadvantage — entries are shuffled and numbered only once submissions close.'
+              : 'No entries were submitted for this contest.'
           }
           action={
             submissionsOpen ? <Button onClick={() => navigate('/submit')}>Add your entry</Button> : undefined

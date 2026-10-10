@@ -29,6 +29,7 @@ import { NotFound } from '@/pages/NotFound';
 import { LEGACY_ROUTES, ROUTES } from '@/routes';
 
 // Owned by other workers. See the header of each file.
+import { Contests } from '@/pages/Contests';
 import { Dashboard } from '@/pages/Dashboard';
 import { Gallery } from '@/pages/Gallery';
 import { MyEntry } from '@/pages/MyEntry';
@@ -52,6 +53,7 @@ export function App(): JSX.Element {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route index element={<Dashboard />} />
+            <Route path="contests" element={<Contests />} />
 
             <Route
               path="gallery"

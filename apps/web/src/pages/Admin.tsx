@@ -20,18 +20,22 @@
 
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   BarChart3,
   CalendarClock,
   ClipboardList,
+  Plus,
   ShieldAlert,
   Trophy,
   Users,
 } from 'lucide-react';
-import { PHASE_LABELS } from '@contest/shared';
+import { PHASE_LABELS, type ContestPublicDto } from '@contest/shared';
 import { api } from '@/lib/api';
+import { useActiveContestId, useContestsQuery } from '@/lib/contest';
 import { queryKeys } from '@/lib/query-client';
 import { useAuth } from '@/auth/AuthProvider';
+import { ROUTES } from '@/routes';
 import {
   Badge,
   Button,
@@ -80,9 +84,12 @@ function NotAuthorised(): JSX.Element {
 export function Admin(): JSX.Element {
   const { status, isAdmin, me } = useAuth();
   const [tab, setTab] = React.useState<string>(TAB_DEFS[0].value);
+  const [activeContestId, selectContest] = useActiveContestId();
+  const contestsQuery = useContestsQuery(status === 'signed-in' && isAdmin);
+  const contests = contestsQuery.data ?? [];
 
   const contest = useQuery({
-    queryKey: queryKeys.contest,
+    queryKey: activeContestId ? [...queryKeys.contest, activeContestId] : queryKeys.contest,
     queryFn: () => api.contest(),
     // Only fetch once we know the caller is allowed to be here.
     enabled: status === 'signed-in' && isAdmin,
@@ -112,24 +119,59 @@ export function Admin(): JSX.Element {
     <main className="mx-auto max-w-page px-page py-section">
       <PageHeader
         eyebrow="Administration"
-        title={data?.title ?? 'Logo design contest'}
-        description="Everything that changes the contest happens here. Destructive steps ask first, and every action on this page is written to the audit log."
+        title={data?.title ?? 'Contest administration'}
+        description="Everything that changes the selected contest happens here. You can switch between contests or create a new one at any time."
         actions={
-          data ? (
-            <div className="flex items-center gap-base">
-              <Badge tone="accent">{PHASE_LABELS[data.phase]}</Badge>
-              {nextDeadline && (
-                <span className="text-sm tabular-nums text-ink-muted">
-                  <Countdown
-                    to={nextDeadline}
-                    serverNow={data.serverNow}
-                    expired="Deadline passed"
-                  />{' '}
-                  · {formatAbsolute(nextDeadline)}
-                </span>
-              )}
-            </div>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-snug">
+            {contests.length > 0 ? (
+              <label className="inline-flex items-center gap-tight text-xs text-ink-muted">
+                <span>Contest:</span>
+                <select
+                  aria-label="Select contest to administer"
+                  className="rounded border border-line bg-paper px-snug py-1 text-xs text-ink focus:border-accent focus:outline-none"
+                  value={activeContestId ?? data?.id ?? ''}
+                  onChange={(e) => {
+                    selectContest(e.target.value || null);
+                  }}
+                >
+                  {contests.map((c: ContestPublicDto) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} ({c.code ?? 'NORTH7'})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            <Link
+              to={ROUTES.contests}
+              className="inline-flex items-center gap-tight rounded border border-line bg-paper-raised px-snug py-1 text-xs font-medium text-ink no-underline hover:bg-paper-sunken"
+            >
+              <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+              New / all contests
+            </Link>
+
+            {data ? (
+              <div className="flex items-center gap-base">
+                {data.code ? (
+                  <span className="rounded border border-line bg-paper-sunken px-snug py-0.5 font-mono text-xs text-ink-muted">
+                    Code: <strong className="font-semibold text-ink">{data.code}</strong>
+                  </span>
+                ) : null}
+                <Badge tone="accent">{PHASE_LABELS[data.phase]}</Badge>
+                {nextDeadline && (
+                  <span className="text-sm tabular-nums text-ink-muted">
+                    <Countdown
+                      to={nextDeadline}
+                      serverNow={data.serverNow}
+                      expired="Deadline passed"
+                    />{' '}
+                    · {formatAbsolute(nextDeadline)}
+                  </span>
+                )}
+              </div>
+            ) : null}
+          </div>
         }
       />
 

@@ -69,6 +69,7 @@ export function getFirebaseAuth(): Auth {
  * is a real usability cost on a link opened in a different browser.
  */
 const EMAIL_KEY = 'n7.signin.email';
+const CONTEST_CODE_KEY = 'n7.signin.contestCode';
 
 export const rememberSignInEmail = (email: string): void => {
   window.localStorage.setItem(EMAIL_KEY, email.trim().toLowerCase());
@@ -78,6 +79,21 @@ export const recallSignInEmail = (): string | null => window.localStorage.getIte
 
 export const forgetSignInEmail = (): void => {
   window.localStorage.removeItem(EMAIL_KEY);
+};
+
+export const rememberPendingContestCode = (code: string): void => {
+  const trimmed = code.trim().toUpperCase();
+  if (trimmed.length > 0) {
+    window.localStorage.setItem(CONTEST_CODE_KEY, trimmed);
+  } else {
+    window.localStorage.removeItem(CONTEST_CODE_KEY);
+  }
+};
+
+export const recallPendingContestCode = (): string | null => window.localStorage.getItem(CONTEST_CODE_KEY);
+
+export const forgetPendingContestCode = (): void => {
+  window.localStorage.removeItem(CONTEST_CODE_KEY);
 };
 
 /**

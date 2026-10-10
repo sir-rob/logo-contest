@@ -13,8 +13,8 @@
  *     voting open four minutes early.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import {
   canSubmit,
   canViewGallery,
@@ -26,7 +26,7 @@ import {
   type ContestPublicDto,
   type PhaseWindows,
 } from '@contest/shared';
-import { api } from './api';
+import { api, getActiveContestId, setActiveContestId } from './api';
 import { queryKeys } from './query-client';
 
 const toDate = (iso: string | null): Date | null => (iso ? new Date(iso) : null);
@@ -130,9 +130,57 @@ export function useServerClock(serverNowIso: string | null | undefined): Date {
   );
 }
 
-export function useContestQuery(enabled = true): UseQueryResult<ContestPublicDto, Error> {
+/**
+ * React hook for reading and switching the active contest ID.
+ * When switched, invalidates contest-scoped queries so the UI refreshes immediately.
+ */
+export function useActiveContestId(): [string | null, (nextId: string | null) => void] {
+  const queryClient = useQueryClient();
+  const [contestId, setContestIdState] = useState<string | null>(() => getActiveContestId());
+
+  useEffect(() => {
+    const onChange = (): void => {
+      setContestIdState(getActiveContestId());
+    };
+    window.addEventListener('contest-changed', onChange);
+    return () => window.removeEventListener('contest-changed', onChange);
+  }, []);
+
+  const selectContest = useCallback(
+    (nextId: string | null) => {
+      setActiveContestId(nextId);
+      setContestIdState(nextId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contest });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.submissions });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ballot });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.results });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+    },
+    [queryClient],
+  );
+
+  return [contestId, selectContest];
+}
+
+export function useContestsQuery(enabled = true): UseQueryResult<ContestPublicDto[], Error> {
   return useQuery({
-    queryKey: queryKeys.contest,
+    queryKey: queryKeys.contests,
+    queryFn: async () => {
+      if (typeof api.contests !== 'function') return [];
+      return api.contests();
+    },
+    enabled: enabled && typeof api.contests === 'function',
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useContestQuery(enabled = true): UseQueryResult<ContestPublicDto, Error> {
+  const [activeContestId] = useActiveContestId();
+  return useQuery({
+    queryKey: activeContestId ? [...queryKeys.contest, activeContestId] : queryKeys.contest,
     queryFn: () => api.contest(),
     enabled,
     // The phase changes at known instants, so a short window is plenty; the

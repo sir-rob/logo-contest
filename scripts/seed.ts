@@ -445,6 +445,7 @@ async function main(): Promise<void> {
       email: user.email,
       displayName: user.displayName,
       role: user.role,
+      registeredContestIds: [contestId],
       createdAt: within(
         new Date(dates.submissionsOpenAt.getTime() - 5 * 86_400_000),
         dates.submissionsOpenAt,

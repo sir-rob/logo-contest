@@ -18,6 +18,7 @@
  */
 
 import {
+  FolderKanban,
   ImagePlus,
   Images,
   LayoutDashboard,
@@ -30,6 +31,7 @@ import type { ContestPhase } from '@contest/shared';
 import type { PhaseGates } from '@/lib/contest';
 
 export const ROUTES = {
+  contests: '/contests',
   dashboard: '/',
   gallery: '/gallery',
   // Where you upload, replace or withdraw YOUR entry. Distinct from /gallery,
@@ -157,6 +159,7 @@ export function navItemsFor(phase: ContestPhase | null, isAdmin: boolean): NavIt
   });
 
   return [
+    item(ROUTES.contests, 'Contests', FolderKanban, null),
     item(ROUTES.dashboard, 'Dashboard', LayoutDashboard, null, { end: true }),
     item(ROUTES.gallery, 'Gallery', Images, 'gallery'),
     // Sits next to Gallery because the two are easily confused: Gallery is

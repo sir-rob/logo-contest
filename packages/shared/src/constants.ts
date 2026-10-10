@@ -44,6 +44,12 @@ export const SIGNED_URL_TTL_SECONDS = 15 * 60;
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_DESCRIPTION_LENGTH = 240;
 export const MAX_DISPLAY_NAME_LENGTH = 40;
+export const MIN_CONTEST_CODE_LENGTH = 2;
+export const MAX_CONTEST_CODE_LENGTH = 32;
+export const DEFAULT_CONTEST_CODE = 'NORTH7';
+
+/** Normalise a contest access code for storage and case-insensitive matching. */
+export const normaliseContestCode = (raw: string): string => raw.trim().toUpperCase();
 
 // ---------------------------------------------------------------------------
 // Auth

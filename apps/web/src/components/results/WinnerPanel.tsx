@@ -47,7 +47,7 @@ export function WinnerPanel({ model, winnerCredit, className }: WinnerPanelProps
           {winner.thumbUrl ? (
             <img
               src={winner.entry?.displayUrl ?? winner.thumbUrl}
-              alt={`The winning logo, ${winner.alias}`}
+              alt={`The winning entry, ${winner.alias}`}
               width={winner.entry?.width}
               height={winner.entry?.height}
               className="max-h-full w-auto object-contain"

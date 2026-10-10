@@ -45,7 +45,7 @@ import { now } from '../config.js';
 import { ballotDoc, submissionDoc } from '../db/collections.js';
 import { getDb } from '../firebase.js';
 import { principalOf } from '../plugins/auth.js';
-import { assertCanVote, loadDefaultContest, phaseOf } from '../services/contest.js';
+import { assertCanVote, loadRequestContest, phaseOf } from '../services/contest.js';
 
 // ---------------------------------------------------------------------------
 // Wire shapes
@@ -190,7 +190,7 @@ export async function registerBallotRoutes(app: FastifyInstance): Promise<void> 
     { preHandler: app.requireAuth },
     async (request: FastifyRequest): Promise<MyBallotDto> => {
       const principal = principalOf(request);
-      const contest = await loadDefaultContest();
+      const contest = await loadRequestContest(request, principal);
 
       // Deliberate: a lookup by the DETERMINISTIC document id, not a
       // `where('voterUid', '==', uid)` query. A key lookup has exactly one
@@ -215,7 +215,7 @@ export async function registerBallotRoutes(app: FastifyInstance): Promise<void> 
       const principal = principalOf(request);
       const { ranking } = BallotBodyShapeSchema.parse(request.body);
 
-      const contest = await loadDefaultContest();
+      const contest = await loadRequestContest(request, principal);
       assertCanVote(phaseOf(contest));
 
       // Cheap checks before spending reads; `validateRanking` repeats them.
@@ -276,7 +276,7 @@ export async function registerBallotRoutes(app: FastifyInstance): Promise<void> 
     { preHandler: app.requireAuth },
     async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
       const principal = principalOf(request);
-      const contest = await loadDefaultContest();
+      const contest = await loadRequestContest(request, principal);
       assertCanVote(phaseOf(contest));
 
       // Same deterministic key. Deleting a ballot that was never cast is a

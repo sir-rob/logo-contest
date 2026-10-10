@@ -35,12 +35,13 @@ import {
   type Role,
   type User,
 } from '@contest/shared';
-import { getConfig, isEmailDomainAllowed, type AppConfig } from '../config.js';
+import { getConfig, isEmailDomainAllowed } from '../config.js';
 import { getAdminAuth, getDb } from '../firebase.js';
 import { ballotDoc, submissionsCol, userDoc, usersCol } from '../db/collections.js';
 import { principalOf } from '../plugins/auth.js';
 import { zodErrorToFields } from '../plugins/error-handler.js';
 import { writeAudit } from '../services/audit.js';
+import { resolveContestId } from '../services/contest.js';
 import { toPublicDto } from '../services/submission-dto.js';
 
 // ---------------------------------------------------------------------------
@@ -256,9 +257,9 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
  * the fact, so there is no shape of this function that can read somebody
  * else's submission even if a later edit gets the projection wrong.
  */
-async function loadOwnSubmission(uid: string, config: AppConfig): Promise<PublicSubmissionDto | null> {
+async function loadOwnSubmission(uid: string, contestId: string): Promise<PublicSubmissionDto | null> {
   const snap = await submissionsCol()
-    .where('contestId', '==', config.defaultContestId)
+    .where('contestId', '==', contestId)
     .where('ownerUid', '==', uid)
     .where('status', '==', 'active')
     .limit(1)
@@ -278,8 +279,8 @@ async function loadOwnSubmission(uid: string, config: AppConfig): Promise<Public
  * not a permission check that could be forgotten, but an addressing scheme
  * that cannot name anyone else.
  */
-async function loadOwnBallot(uid: string, config: AppConfig): Promise<string[] | null> {
-  const snap = await ballotDoc(config.defaultContestId, uid).get();
+async function loadOwnBallot(uid: string, contestId: string): Promise<string[] | null> {
+  const snap = await ballotDoc(contestId, uid).get();
   const ballot = snap.data();
   return ballot ? [...ballot.ranking] : null;
 }
@@ -292,10 +293,10 @@ async function loadOwnBallot(uid: string, config: AppConfig): Promise<string[] |
  * spreads a `User` entity in here, the extra server-only fields are stripped by
  * the schema and a shape change fails on this line rather than in a client.
  */
-async function buildMe(user: User, config: AppConfig): Promise<MeDto> {
+async function buildMe(user: User, contestId: string): Promise<MeDto> {
   const [mySubmission, myBallot] = await Promise.all([
-    loadOwnSubmission(user.uid, config),
-    loadOwnBallot(user.uid, config),
+    loadOwnSubmission(user.uid, contestId),
+    loadOwnBallot(user.uid, contestId),
   ]);
 
   return MeSchema.parse({
@@ -303,6 +304,7 @@ async function buildMe(user: User, config: AppConfig): Promise<MeDto> {
     email: user.email,
     displayName: user.displayName,
     role: user.role,
+    registeredContestIds: user.registeredContestIds ?? [],
     mySubmission,
     myBallot,
   } satisfies MeDto);
@@ -391,7 +393,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   /** GET /me — the caller's own profile, entry and ballot. */
   app.get('/me', { preHandler: app.requireAuth }, async (request) => {
     const principal = principalOf(request);
-    return buildMe(principal.user, getConfig());
+    const contestId = resolveContestId(request, getConfig());
+    return buildMe(principal.user, contestId);
   });
 
   /** PATCH /me — change your own display name. */
@@ -417,7 +420,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const user = snap.data();
     if (!user) throw new ApiError('NOT_FOUND', 'Your account record is missing.');
 
-    return buildMe(user, config);
+    const contestId = resolveContestId(request, config);
+    return buildMe(user, contestId);
   });
 
   /**

@@ -17,7 +17,7 @@ import { LogOut } from 'lucide-react';
 import { AccentToggle, Button } from '@/components/ui';
 import { PhaseBadge, PhaseBanner } from '@/components/PhaseBanner';
 import { useAuth } from '@/auth/AuthProvider';
-import { useContest } from '@/lib/contest';
+import { useActiveContestId, useContest, useContestsQuery } from '@/lib/contest';
 import { navItemsFor, type NavItem } from '@/routes';
 import { CONTEST_NAME, FOOTER_NOTE } from '@/lib/branding';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,9 @@ import { cn } from '@/lib/utils';
 export function AppShell({ children }: { children?: ReactNode }): JSX.Element {
   const { me, isAdmin, signOut } = useAuth();
   const { contest, phase } = useContest();
+  const [activeContestId, selectContest] = useActiveContestId();
+  const contestsQuery = useContestsQuery(true);
+  const contests = contestsQuery.data ?? [];
 
   const title = contest?.title ?? CONTEST_NAME;
   const items = navItemsFor(phase, isAdmin).filter((item) => item.visible);
@@ -41,12 +44,34 @@ export function AppShell({ children }: { children?: ReactNode }): JSX.Element {
 
       <header className="border-b border-line bg-paper-raised">
         <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-x-base gap-y-tight px-base py-snug">
-          <Link
-            to="/"
-            className="font-display text-lead text-ink no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {title}
-          </Link>
+          <div className="flex flex-wrap items-center gap-snug">
+            <Link
+              to="/"
+              className="font-display text-lead text-ink no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {title}
+            </Link>
+
+            {contests.length > 1 ? (
+              <label className="inline-flex items-center gap-tight text-xs text-ink-muted">
+                <span className="sr-only">Switch contest</span>
+                <select
+                  aria-label="Switch contest"
+                  className="rounded border border-line bg-paper px-snug py-1 text-xs text-ink focus:border-accent focus:outline-none"
+                  value={activeContestId ?? contest?.id ?? ''}
+                  onChange={(e) => {
+                    selectContest(e.target.value || null);
+                  }}
+                >
+                  {contests.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
 
           <div className="flex items-center gap-snug">
             <PhaseBadge />

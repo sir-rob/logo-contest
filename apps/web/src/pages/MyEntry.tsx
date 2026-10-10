@@ -662,7 +662,7 @@ function LockedState({
           title={mine ? 'Your entry is in' : 'Submissions are closed'}
           description={
             mine
-              ? 'The deadline has passed. This is the logo that goes to the vote — it can no longer be replaced or withdrawn.'
+              ? 'The deadline has passed. This is the entry that goes to the vote — it can no longer be replaced or withdrawn.'
               : 'The deadline has passed and no entry was uploaded from this account. Nothing further is needed from you here.'
           }
         />

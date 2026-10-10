@@ -23,6 +23,7 @@ import {
   DEFAULT_ERROR_MESSAGES,
   type AuditRowDto,
   type ContestPublicDto,
+  type CreateContestBody,
   type DashboardDto,
   type DisqualifyBody,
   type ErrorCode,
@@ -39,6 +40,31 @@ import { z } from 'zod';
 import { currentIdToken } from './firebase';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '');
+
+const ACTIVE_CONTEST_KEY = 'n7.activeContestId';
+
+/** Read the currently selected contest ID, if any. */
+export function getActiveContestId(): string | null {
+  try {
+    return window.localStorage.getItem(ACTIVE_CONTEST_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Set the currently selected contest ID and notify listeners. */
+export function setActiveContestId(contestId: string | null): void {
+  try {
+    if (contestId && contestId.trim().length > 0) {
+      window.localStorage.setItem(ACTIVE_CONTEST_KEY, contestId.trim());
+    } else {
+      window.localStorage.removeItem(ACTIVE_CONTEST_KEY);
+    }
+    window.dispatchEvent(new CustomEvent('contest-changed', { detail: contestId }));
+  } catch {
+    // Ignore storage errors in restricted environments.
+  }
+}
 
 export class ApiClientError extends Error {
   constructor(
@@ -69,6 +95,8 @@ interface RequestOptions {
   formData?: FormData;
   /** Skip the Authorization header (only the magic-link request does this). */
   anonymous?: boolean;
+  /** Explicit contestId override for this request. */
+  contestId?: string | null;
   signal?: AbortSignal;
 }
 
@@ -78,6 +106,10 @@ async function request(path: string, options: RequestOptions = {}): Promise<Resp
   if (!options.anonymous) {
     const token = await currentIdToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+  const activeContestId = options.contestId !== undefined ? options.contestId : getActiveContestId();
+  if (activeContestId) {
+    headers['x-contest-id'] = activeContestId;
   }
   if (options.body !== undefined && !options.formData) {
     headers['Content-Type'] = 'application/json';
@@ -125,15 +157,6 @@ async function request(path: string, options: RequestOptions = {}): Promise<Resp
 
 /**
  * Fetch + validate against a DTO schema. A drift shows up here, loudly.
- *
- * The generic is the SCHEMA, not the parsed type. Several DTOs use zod
- * `.default()` (`Round.eliminated`, `ModerationSubmission.duplicateOf`), which
- * makes a schema's INPUT type differ from its OUTPUT type — the field is
- * optional going in and guaranteed coming out. `z.ZodType<T>` collapses those
- * two into one parameter and would bind `T` to the input shape, so every
- * method annotated with a DTO type (which is `z.infer`, i.e. the OUTPUT) would
- * fail to typecheck. Inferring `z.output<S>` is what `.parse()` actually
- * returns, and it matches the DTOs exactly.
  */
 async function getJson<S extends z.ZodTypeAny>(
   path: string,
@@ -149,6 +172,8 @@ async function getJson<S extends z.ZodTypeAny>(
 // Response envelopes the server returns for list routes
 // ---------------------------------------------------------------------------
 
+const ContestsResponseSchema = z.object({ contests: z.array(ContestPublicSchema) });
+const JoinContestResponseSchema = z.object({ contest: ContestPublicSchema });
 const SubmissionsResponseSchema = z.object({ submissions: z.array(PublicSubmissionSchema) });
 const ModerationResponseSchema = z.object({ submissions: z.array(ModerationSubmissionSchema) });
 const BallotResponseSchema = z.object({ ranking: z.array(z.string()).nullable() });
@@ -182,6 +207,15 @@ export const api = {
     getJson('/me', MeSchema, { method: 'PATCH', body: { displayName } }),
 
   contest: (): Promise<ContestPublicDto> => getJson('/contest', ContestPublicSchema),
+
+  /** List all contests accessible to the signed-in caller. */
+  contests: async (): Promise<ContestPublicDto[]> =>
+    (await getJson('/contests', ContestsResponseSchema)).contests,
+
+  /** Register for a contest using its unique code. */
+  joinContest: async (code: string): Promise<ContestPublicDto> =>
+    (await getJson('/contests/join', JoinContestResponseSchema, { method: 'POST', body: { code } }))
+      .contest,
 
   submissions: async (): Promise<PublicSubmissionDto[]> =>
     (await getJson('/submissions', SubmissionsResponseSchema)).submissions,
@@ -237,6 +271,9 @@ export const api = {
   // hiding the UI is a convenience, not the control.
   // -------------------------------------------------------------------------
   admin: {
+    createContest: (body: CreateContestBody): Promise<ContestPublicDto> =>
+      getJson('/admin/contests', ContestPublicSchema, { method: 'POST', body }),
+
     updateContest: (body: UpdateContestBody): Promise<ContestPublicDto> =>
       getJson('/admin/contest', ContestPublicSchema, { method: 'PATCH', body }),
 

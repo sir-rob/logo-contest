@@ -140,8 +140,8 @@ export function UploadDropzone({
               : dragging
                 ? 'Drop it here'
                 : hasExistingEntry
-                  ? 'Drag a new logo here, or choose a file'
-                  : 'Drag your logo here, or choose a file'}
+                  ? 'Drag a new image here, or choose a file'
+                  : 'Drag your image here, or choose a file'}
           </span>
           <span className="block text-xs text-ink-subtle">
             {ACCEPTED_TYPES_LABEL} · up to {MAX_UPLOAD_LABEL} · {MIN_IMAGE_DIMENSION}–{MAX_IMAGE_DIMENSION}

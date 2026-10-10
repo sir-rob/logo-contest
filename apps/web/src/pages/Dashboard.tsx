@@ -336,7 +336,7 @@ function GalleryNote({ count }: { count: number }): JSX.Element {
       <PanelHeader
         eyebrow="While you wait"
         title="See what's been submitted"
-        description="Every entry is shown anonymously — an alias and the logo, nothing about who made it."
+        description="Every entry is shown anonymously — an alias and the image, nothing about who made it."
       />
       <Link
         to="/gallery"
@@ -357,10 +357,31 @@ function DashboardError({
   onRetry: () => void;
   isRetrying: boolean;
 }): JSX.Element {
+  const isAccessRequired =
+    error instanceof ApiClientError && error.code === 'CONTEST_ACCESS_REQUIRED';
   const message =
     error instanceof ApiClientError
       ? error.message
       : 'Something went wrong loading the contest dashboard.';
+
+  if (isAccessRequired) {
+    return (
+      <Panel>
+        <EmptyState
+          title="Register for a contest to view its dashboard"
+          description={message}
+          action={
+            <Link
+              to="/contests"
+              className="inline-flex items-center rounded bg-accent px-base py-snug text-sm font-medium text-accent-contrast no-underline"
+            >
+              Go to your contests
+            </Link>
+          }
+        />
+      </Panel>
+    );
+  }
 
   return (
     <Panel>

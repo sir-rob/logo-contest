@@ -110,6 +110,7 @@ export function seedPerson(person: {
   email: string;
   displayName: string;
   role?: 'member' | 'admin';
+  registeredContestIds?: string[];
 }): TestPerson {
   const role = person.role ?? 'member';
   const at = new Date(FAKE_NOW);
@@ -117,6 +118,7 @@ export function seedPerson(person: {
     email: person.email,
     displayName: person.displayName,
     role,
+    registeredContestIds: person.registeredContestIds ?? [CONTEST_ID],
     createdAt: at,
     lastSeenAt: at,
   };
@@ -146,6 +148,9 @@ export function tokenFor(claims: FakeTokenClaims): string {
 // ---------------------------------------------------------------------------
 
 export interface SeedContestOptions {
+  id?: string;
+  title?: string;
+  code?: string;
   phase?: Contest['phaseOverride'];
   showLiveStandings?: boolean;
   minBallotsToPublish?: number;
@@ -159,9 +164,11 @@ export interface SeedContestOptions {
 export function seedContest(options: SeedContestOptions = {}): void {
   const base = new Date(FAKE_NOW).getTime();
   const day = 24 * 60 * 60 * 1000;
+  const id = options.id ?? CONTEST_ID;
   const contest: Omit<Contest, 'id'> = {
-    title: 'Media Moguls (North 7) Logo Contest',
+    title: options.title ?? 'Media Moguls (North 7) Logo Contest',
     description: 'Pick the shirt.',
+    code: options.code ?? 'NORTH7',
     phaseOverride: options.phase ?? null,
     submissionsOpenAt: new Date(base - 30 * day),
     submissionsCloseAt: options.submissionsCloseAt === undefined ? new Date(base - 10 * day) : options.submissionsCloseAt,
@@ -178,7 +185,7 @@ export function seedContest(options: SeedContestOptions = {}): void {
     createdAt: new Date(base - 40 * day),
     updatedAt: new Date(base - 40 * day),
   };
-  fakeDb.seed(COLLECTIONS.contests, CONTEST_ID, contest as unknown as Record<string, unknown>);
+  fakeDb.seed(COLLECTIONS.contests, id, contest as unknown as Record<string, unknown>);
 }
 
 // ---------------------------------------------------------------------------
@@ -397,7 +404,7 @@ export function registeredRoutes(app: FastifyInstance): RegisteredRoute[] {
     const [, segment, methodList] = parsed;
     if (!segment || !methodList) continue;
     // CORS installs a wildcard OPTIONS handler that is not a real route.
-    if (!segment.startsWith('/')) continue;
+    if (segment === '*' || (!segment.startsWith('/') && depth === 0)) continue;
 
     const url = depth === 0 ? segment : `${prefixAtDepth[depth - 1] ?? ''}${segment}`;
     prefixAtDepth[depth] = url;

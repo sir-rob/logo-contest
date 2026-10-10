@@ -27,7 +27,7 @@ import { emailLocalPart, getConfig, now } from '../config.js';
 import { getDb } from '../firebase.js';
 import { submissionDoc, submissionsCol } from '../db/collections.js';
 import { principalOf } from '../plugins/auth.js';
-import { assertCanSubmit, assertCanViewGallery, loadContestWithPhase } from '../services/contest.js';
+import { assertCanSubmit, assertCanViewGallery, loadRequestContestWithPhase } from '../services/contest.js';
 import { toPublicDto, toPublicDtos } from '../services/submission-dto.js';
 import { deletePrefix, newStoragePrefix, renditionPath, uploadObject } from '../services/storage.js';
 import { assignAliasesIfDue, orderSubmissionsForViewer } from '../services/aliases.js';
@@ -287,7 +287,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
   // -------------------------------------------------------------------------
   app.get('/submissions', { preHandler: app.requireAuth }, async (request: FastifyRequest) => {
     const principal = principalOf(request);
-    const { contest, phase } = await loadContestWithPhase(getConfig().defaultContestId);
+    const { contest, phase } = await loadRequestContestWithPhase(request, principal);
     assertCanViewGallery(phase);
 
     // Idempotent and cheap once done: a single contest read on the hot path.
@@ -312,7 +312,7 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
   // -------------------------------------------------------------------------
   app.post('/submissions', { preHandler: app.requireAuth }, async (request: FastifyRequest) => {
     const principal = principalOf(request);
-    const { contest, phase } = await loadContestWithPhase(getConfig().defaultContestId);
+    const { contest, phase } = await loadRequestContestWithPhase(request, principal);
     assertCanSubmit(phase);
 
     const payload = await readUpload(request);
@@ -432,7 +432,17 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
     { preHandler: app.requireAuth },
     async (request): Promise<PublicSubmissionDto> => {
       const principal = principalOf(request);
-      const { contest, phase } = await loadContestWithPhase(getConfig().defaultContestId);
+      const existingSnap = await submissionDoc(request.params.id).get();
+      const targetContestId = existingSnap.data()?.contestId;
+      const { contest, phase } = targetContestId
+        ? await (async () => {
+            const c = await loadRequestContestWithPhase(
+              { ...request, query: { ...(request.query as object), contestId: targetContestId } } as FastifyRequest,
+              principal,
+            );
+            return c;
+          })()
+        : await loadRequestContestWithPhase(request, principal);
       assertCanSubmit(phase);
 
       const existing = await loadOwnEntry(request.params.id, principal.uid, contest.id);
@@ -483,7 +493,14 @@ export async function registerSubmissionRoutes(app: FastifyInstance): Promise<vo
     { preHandler: app.requireAuth },
     async (request, reply: FastifyReply): Promise<void> => {
       const principal = principalOf(request);
-      const { contest, phase } = await loadContestWithPhase(getConfig().defaultContestId);
+      const existingSnap = await submissionDoc(request.params.id).get();
+      const targetContestId = existingSnap.data()?.contestId;
+      const { contest, phase } = targetContestId
+        ? await loadRequestContestWithPhase(
+            { ...request, query: { ...(request.query as object), contestId: targetContestId } } as FastifyRequest,
+            principal,
+          )
+        : await loadRequestContestWithPhase(request, principal);
       assertCanSubmit(phase);
 
       const existing = await loadOwnEntry(request.params.id, principal.uid, contest.id);

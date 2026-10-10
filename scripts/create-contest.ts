@@ -90,6 +90,7 @@ async function main(): Promise<void> {
     description:
       'Upload one logo, then rank your top five. The winner goes on the team shirt. ' +
       'Entries are anonymous — nobody can see who submitted what, and nobody can see how anyone voted.',
+    code: 'NORTH7',
 
     phaseOverride: null,
     submissionsOpenAt: Timestamp.fromDate(now),

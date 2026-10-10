@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { ContestPhaseSchema } from './phases.js';
 import {
+  DEFAULT_CONTEST_CODE,
+  MAX_CONTEST_CODE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
   MAX_DISPLAY_NAME_LENGTH,
   MAX_RANKS,
@@ -29,6 +31,8 @@ export const UserSchema = z.object({
   email: z.string().email(),
   displayName: z.string().max(MAX_DISPLAY_NAME_LENGTH),
   role: RoleSchema,
+  /** Contests this user has registered for using a contest code. */
+  registeredContestIds: z.array(z.string().min(1)).default([]),
   createdAt: z.date(),
   lastSeenAt: z.date(),
 });
@@ -42,6 +46,8 @@ export const ContestSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1).max(120),
   description: z.string().max(2000).default(''),
+  /** Unique access code participants enter to register for this contest. */
+  code: z.string().min(1).max(MAX_CONTEST_CODE_LENGTH).default(DEFAULT_CONTEST_CODE),
 
   phaseOverride: ContestPhaseSchema.nullable().default(null),
   submissionsOpenAt: z.date().nullable().default(null),
@@ -155,6 +161,7 @@ export const rankingHasNoDuplicates = (ranking: readonly string[]): boolean =>
 export const AUDIT_ACTIONS = [
   'admin.promote',
   'admin.demote',
+  'contest.create',
   'contest.update',
   'contest.phase_override',
   'submission.disqualify',
